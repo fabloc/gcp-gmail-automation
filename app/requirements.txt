@@ -1,0 +1,8 @@
+Flask>=2.0
+google-api-python-client
+google-auth
+google-cloud-datastore
+google-cloud-storage
+google-cloud-logging
+google-cloud-iam
+google-api-python-client
