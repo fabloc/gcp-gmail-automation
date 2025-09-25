@@ -67,16 +67,13 @@ resource "google_pubsub_topic_iam_member" "member" {
 # 3. Service Account & IAM
 # -------------------------------------------------------------------
 
-resource "google_service_account" "cloud_run_sa" {
-
+data "google_service_account" "cloud_run_sa" {
   project      = var.project_id
-  account_id   = "email-automation-cloud-run-sa"
-  display_name = "Email Automation Cloud Run SA"
+  account_id = "email-automation-cloud-run-sa"
 }
 
 # Associate the required roles to the service account
 resource "google_project_iam_member" "cloud_run_sa_roles" {
-  depends_on = [google_service_account.cloud_run_sa]
 
   for_each = toset([
     "roles/datastore.user",
@@ -88,7 +85,7 @@ resource "google_project_iam_member" "cloud_run_sa_roles" {
 
   project = var.project_id
   role    = each.key
-  member  = google_service_account.cloud_run_sa.member
+  member  = data.google_service_account.cloud_run_sa.member
 }
 
 resource "google_service_account" "eventarc_sa" {
@@ -118,9 +115,8 @@ resource "google_project_iam_member" "eventarc_sa_roles" {
 
 # Create the service account key in-memory
 resource "google_service_account_key" "sa_key" {
-  depends_on = [google_service_account.cloud_run_sa]
 
-  service_account_id = google_service_account.cloud_run_sa.name
+  service_account_id = data.google_service_account.cloud_run_sa.name
 }
 
 # Create the secret container
@@ -161,7 +157,7 @@ resource "google_cloud_run_v2_service" "email_automation" {
 
   template {
     # Run as the SA we created so the app has the right permissions
-    service_account = google_service_account.cloud_run_sa.email
+    service_account = data.google_service_account.cloud_run_sa.email
 
     # Set scaling configuration
     max_instance_request_concurrency = 1

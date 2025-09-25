@@ -109,6 +109,36 @@ check_gcp_constraints
 gcloud services enable artifactregistry.googleapis.com cloudbuild.googleapis.com run.googleapis.com compute.googleapis.com
 gcloud services enable servicenetworking.googleapis.com cloudresourcemanager.googleapis.com gmail.googleapis.com cloudscheduler.googleapis.com
 
+# Create cloud_run_sa service account
+gcloud iam service-accounts create email-automation-cloud-run-sa \
+    --display-name="Email Automation Cloud Run SA" \
+    --project=$PROJECT_ID
+
+# The following steps are required to configure domain-wide delegation for the service account.
+# This allows the service account to access user data across your Google Workspace domain.
+#
+# 1. Get the service account's unique ID:
+CLIENT_ID=$(gcloud iam service-accounts describe email-automation-cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com --project=$PROJECT_ID --format='value(oauth2ClientId)')
+
+# 2. Authorize the service account in the Google Workspace Admin console:
+#    a. Go to your Google Workspace Admin console (admin.google.com).
+#    b. Navigate to "Security" > "Access and data control" > "API controls".
+#    c. In the "Domain-wide delegation" section, click "Manage Domain-wide delegation".
+#    d. Click "Add new".
+#    e. In the "Client ID" field, enter the following Client ID:
+#       $CLIENT_ID
+#    f. In the "OAuth Scopes" field, enter the following scopes:
+#       https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.modify
+#    g. Click "Authorize".
+
+echo "--------------------------------------------------------------------------------"
+echo "Domain-wide delegation configuration required."
+echo "Please follow the instructions in the setup.sh script to authorize the service account."
+echo "Service Account Client ID: $CLIENT_ID"
+echo "--------------------------------------------------------------------------------"
+
+read -p "Press [Enter] key to continue after you have configured domain-wide delegation..."
+
 cp -f variables.auto.tfvars.tmpl terraform/variables.auto.tfvars
 
 # Updating the Project and Location details in app config and override files
