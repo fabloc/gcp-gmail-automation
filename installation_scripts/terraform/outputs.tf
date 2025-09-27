@@ -15,5 +15,5 @@ output "pubsub_topic_name" {
 
 output "application_service_account_email" {
   description = "The email of the service account for the application."
-  value       = google_service_account.cloud_run_sa.email
+  value       = data.google_service_account.cloud_run_sa.email
 }

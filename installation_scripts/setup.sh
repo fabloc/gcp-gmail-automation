@@ -6,11 +6,11 @@
 
 # Global variables
 #################################
-PROJECT_ID="email-tests-472712"                             # ID of the project where you want to deploy
+PROJECT_ID="your-gcp-project-id"                             # ID of the project where you want to deploy
 REGION="europe-west1"                                       # Name of the region
-AUTH_USER="admin@fabienlocquet.altostrat.com"               # User that will run the application
+AUTH_USER="your_user@example.com"               # User that will run the application
 ARTIFACT_REGISTRY_REPO="email-automation-gcr"               # Name of the Artifact Registry Repository
-TARGET_EMAIL_ADDRESS="admin@fabienlocquet.altostrat.com"    # Name of the email to manager
+TARGET_EMAIL_ADDRESS="email-to-monitor@example.com"    # Name of the email to manager
 SERVICE_NAME="email-automation-service"                     # Name of the Cloud Run Service
 #################################
 
@@ -106,13 +106,17 @@ check_gcp_constraints
 
 
 # Enabling the services
-gcloud services enable artifactregistry.googleapis.com cloudbuild.googleapis.com run.googleapis.com compute.googleapis.com
-gcloud services enable servicenetworking.googleapis.com cloudresourcemanager.googleapis.com gmail.googleapis.com cloudscheduler.googleapis.com
+gcloud services enable artifactregistry.googleapis.com cloudbuild.googleapis.com run.googleapis.com compute.googleapis.com firestore.googleapis.com secretmanager.googleapis.com
+gcloud services enable servicenetworking.googleapis.com cloudresourcemanager.googleapis.com gmail.googleapis.com cloudscheduler.googleapis.com eventarc.googleapis.com
 
 # Create cloud_run_sa service account
-gcloud iam service-accounts create email-automation-cloud-run-sa \
-    --display-name="Email Automation Cloud Run SA" \
-    --project=$PROJECT_ID
+if gcloud iam service-accounts list --filter="email:email-automation-cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com" --format="value(email)" | grep -q "."; then
+    echo "Service account email-automation-cloud-run-sa already exists."
+else
+    gcloud iam service-accounts create email-automation-cloud-run-sa \
+        --display-name="Email Automation Cloud Run SA" \
+        --project=$PROJECT_ID
+fi
 
 # The following steps are required to configure domain-wide delegation for the service account.
 # This allows the service account to access user data across your Google Workspace domain.
@@ -150,11 +154,46 @@ sed -i "s|target_email_address = \"\"|target_email_address = \"${TARGET_EMAIL_AD
 
 # Starting Configuration
 echo "***** Create a new Artifact Repository for our webapp *****"
-gcloud artifacts repositories create "$ARTIFACT_REGISTRY_REPO" --location="$REGION" --repository-format=Docker > /dev/null
-echo "***** Repository created *****"
+if gcloud artifacts repositories list --location="$REGION" --filter="name:$ARTIFACT_REGISTRY_REPO" --format="value(name)" | grep -q "."; then
+    echo "Artifact Registry repository $ARTIFACT_REGISTRY_REPO already exists."
+else
+    gcloud artifacts repositories create "$ARTIFACT_REGISTRY_REPO" --location="$REGION" --repository-format=Docker > /dev/null
+    echo "***** Repository created *****"
+fi
 
 echo "***** Setup artefact docker authentication *****"
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet > /dev/null
+
+# Check for Storage Object User role on default compute service account
+# Verify that the default compute service account has the role 'Storage Object User'
+# This is required for the Cloud Build build to be able to store the app image in the Artifact Registry
+echo "Verifying that the default compute service account has the role 'Storage Object User'..."
+GCP_PROJECT_ID=$(gcloud config get-value project)
+GCP_PROJECT_NUMBER=$(gcloud projects describe $GCP_PROJECT_ID --format='value(projectNumber)')
+DEFAULT_COMPUTE_SERVICE_ACCOUNT="$GCP_PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+if ! gcloud projects get-iam-policy $GCP_PROJECT_ID --flatten="bindings" --filter="bindings.role = 'roles/storage.objectUser' AND bindings.members:'serviceAccount:$DEFAULT_COMPUTE_SERVICE_ACCOUNT'" --format="get(bindings.role)" | grep . >/dev/null; then
+    echo "The default compute service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT does not have the role 'Storage Object User'."
+    echo "Please add the role 'Storage Object User' to the service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT in the IAM & Admin section of the Google Cloud Console."
+    read -p "Press any key to continue when the role has been added."
+fi
+
+# Verify that the default compute service account has the role 'Artifact Registry Writer'
+# This is required for the Cloud Build build to be able to store the app image in the Artifact Registry
+echo "Verifying that the default compute service account has the role 'Artifact Registry Writer'..."
+if ! gcloud projects get-iam-policy $GCP_PROJECT_ID --flatten="bindings" --filter="bindings.role = 'roles/artifactregistry.writer' AND bindings.members:'serviceAccount:$DEFAULT_COMPUTE_SERVICE_ACCOUNT'" --format="get(bindings.role)" | grep . >/dev/null; then
+    echo "The default compute service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT does not have the role 'Artifact Registry Writer'."
+    echo "Please add the role 'Artifact Registry Writer' to the service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT in the IAM & Admin section of the Google Cloud Console."
+    read -p "Press any key to continue when the role has been added."
+fi
+
+# Verify that the default compute service account has the role 'Artifact Registry Writer'
+# This is required for the Cloud Build build to be able to store the app image in the Artifact Registry
+echo "Verifying that the default compute service account has the role 'Cloud Logging Writer'..."
+if ! gcloud projects get-iam-policy $GCP_PROJECT_ID --flatten="bindings" --filter="bindings.role = 'roles/logging.logWriter' AND bindings.members:'serviceAccount:$DEFAULT_COMPUTE_SERVICE_ACCOUNT'" --format="get(bindings.role)" | grep . >/dev/null; then
+    echo "The default compute service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT does not have the role 'Cloud Logging Writer'."
+    echo "Please add the role 'Artifact Registry Writer' to the service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT in the IAM & Admin section of the Google Cloud Console."
+    read -p "Press any key to continue when the role has been added."
+fi
 
 echo "***** Build WebApp Docker image *****"
 cd ..

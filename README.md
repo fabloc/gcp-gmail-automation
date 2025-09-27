@@ -41,7 +41,7 @@ The deployment is automated via a single script.
     #################################
     PROJECT_ID="your-gcp-project-id"                             # ID of the project where you want to deploy
     REGION="europe-west1"                                       # Name of the region
-    AUTH_USER="your-workspace-admin@example.com"               # User that will run the application
+    AUTH_USER="your_user@example.com"               # User that will run the application
     ARTIFACT_REGISTRY_REPO="email-automation-gcr"               # Name of the Artifact Registry Repository
     TARGET_EMAIL_ADDRESS="email-to-monitor@example.com"    # Name of the email to manager
     SERVICE_NAME="email-automation-service"                     # Name of the Cloud Run Service
