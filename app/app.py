@@ -296,7 +296,7 @@ def process_pubsub_push():
 # --- Activate Gmail Notifications ---
 @app.route('/renew_gmail_push_permissions', methods=['POST'])
 def renew_gmail_push_permissions():
-    logger.info("Renewing Gmail push notification permissions")
+    logger.info("Activating Gmail push notification permissions...")
     try:
         service = get_gmail_service(TARGET_USER_EMAIL)
         if not service:

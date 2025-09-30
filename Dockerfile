@@ -23,4 +23,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m compileall -q -b -f .
 
 # Run app.py when the container launches
-ENTRYPOINT ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=8080"]
+ENTRYPOINT ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]

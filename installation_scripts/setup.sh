@@ -24,7 +24,6 @@ function check_if_project_id_is_setup() {
     fi
 }
 
-
 function check_gcloud_authentication() {
     # Check if the user is authenticated with gcloud
     local AUTHENTICATED_USER=$(gcloud auth list --format="value(account)" --filter="status:ACTIVE")
@@ -86,6 +85,31 @@ function check_gcp_constraints() {
  done
 }
 
+function enable_services_with_tos_check() {
+    local services=("$@")
+    for service in "${services[@]}"; do
+        echo "Enabling service: $service"
+        while true; do
+            if gcloud services enable "$service" --project="$PROJECT_ID" 2>/dev/null; then
+                echo "Service $service enabled successfully."
+                break
+            else
+                output=$(gcloud services enable "$service" --project="$PROJECT_ID" 2>&1)
+                if [[ $output == *"FAILED_PRECONDITION"* ]]; then
+                    echo "Error enabling service $service. The Terms of Service have not been accepted."
+                    echo "Please visit the following URL to accept the Terms of Service:"
+                    echo "https://console.cloud.google.com/apis/library/$service?project=$PROJECT_ID"
+                    read -p "Press [Enter] key to continue after accepting the terms..."
+                else
+                    echo "An unexpected error occurred while enabling service $service:"
+                    echo "$output"
+                    exit 1
+                fi
+            fi
+        done
+    done
+}
+
 # Running checks before deploy
 echo ""
 echo "Running pre-checks"
@@ -106,8 +130,20 @@ check_gcp_constraints
 
 
 # Enabling the services
-gcloud services enable artifactregistry.googleapis.com cloudbuild.googleapis.com run.googleapis.com compute.googleapis.com firestore.googleapis.com secretmanager.googleapis.com
-gcloud services enable servicenetworking.googleapis.com cloudresourcemanager.googleapis.com gmail.googleapis.com cloudscheduler.googleapis.com eventarc.googleapis.com
+SERVICES_TO_ENABLE=(
+    "artifactregistry.googleapis.com"
+    "cloudbuild.googleapis.com"
+    "run.googleapis.com"
+    "compute.googleapis.com"
+    "firestore.googleapis.com"
+    "secretmanager.googleapis.com"
+    "servicenetworking.googleapis.com"
+    "cloudresourcemanager.googleapis.com"
+    "gmail.googleapis.com"
+    "cloudscheduler.googleapis.com"
+    "eventarc.googleapis.com"
+)
+enable_services_with_tos_check "${SERVICES_TO_ENABLE[@]}"
 
 # Create cloud_run_sa service account
 if gcloud iam service-accounts list --filter="email:email-automation-cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com" --format="value(email)" | grep -q "."; then
@@ -188,10 +224,11 @@ fi
 
 # Verify that the default compute service account has the role 'Artifact Registry Writer'
 # This is required for the Cloud Build build to be able to store the app image in the Artifact Registry
-echo "Verifying that the default compute service account has the role 'Cloud Logging Writer'..."
+echo "Verifying that the default compute service account has the role 'Logs Writer'..."
 if ! gcloud projects get-iam-policy $GCP_PROJECT_ID --flatten="bindings" --filter="bindings.role = 'roles/logging.logWriter' AND bindings.members:'serviceAccount:$DEFAULT_COMPUTE_SERVICE_ACCOUNT'" --format="get(bindings.role)" | grep . >/dev/null; then
     echo "The default compute service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT does not have the role 'Cloud Logging Writer'."
-    echo "Please add the role 'Artifact Registry Writer' to the service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT in the IAM & Admin section of the Google Cloud Console."
+    echo "Please add the role 'Logs
+     Writer' to the service account $DEFAULT_COMPUTE_SERVICE_ACCOUNT in the IAM & Admin section of the Google Cloud Console."
     read -p "Press any key to continue when the role has been added."
 fi
 
@@ -200,7 +237,7 @@ cd ..
 gcloud builds submit --tag "$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REGISTRY_REPO/$SERVICE_NAME" > /dev/null
 
 echo "***** Checking Terraform Installation *****"
-if ! command -v terraform version &> /dev/null
+if ! command -v terraform &> /dev/null
 then
     echo "Terraform is not installed, please install it and try again."
     exit 1
