@@ -70,6 +70,8 @@ The deployment is automated via a single script.
         `https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.modify`
     *   Click **Authorize**.
 
+    **Note on Authentication:** When using Google Workspace APIs, authentication requires a service account key file. This is because the Workspace authentication server needs the client ID from the key file to verify that the service account has been granted domain-wide delegation permissions. Default application credentials or tokens don't seem to have this information, and the authentication fails.
+
 4.  **Complete the Deployment:**
 
     Once you have authorized the service account in the Admin console, return to the terminal and press **[Enter]** to continue. The script will then proceed to build the Docker image, and deploy the infrastructure using Terraform.
